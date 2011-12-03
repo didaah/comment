@@ -1,0 +1,158 @@
+<?php
+// $Id$
+
+/**
+ * @Implement of hook_schema()
+ */
+function comment_schema() {
+  $schema['comment'] = array(
+    'description' => '评论',
+    'fields' => array(
+      'cid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'ext_id' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => '扩展 id，由模块定义',
+      ),
+      'ext_id2' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => '扩展 id，由模块定义',
+      ),
+      'ext_type' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => '扩展类型，由模块定义',
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => '标题',
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => '昵称',
+      ),
+      'mail' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => '邮件',
+      ),
+      'host' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => '主机地址',
+      ),
+      'site' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => '主页',
+      ),
+      'body' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'size' => 'big',
+        'description' => '评论内容'
+      ),
+      'data' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'size' => 'medium',
+        'serialize' => true,
+        'description' => '其它数据'
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => '作者 id',
+      ),
+      'format' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => '输入格式',
+      ),
+      'status' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+        'description' => '0：待审核，1、正常，模块也可自定义',
+      ),
+      'pid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => '父评论 id',
+      ),
+      'created' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => '创建时间',
+      ),
+      'updated' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => '更新时间',
+      ),
+    ),
+    'indexes' => array(
+      'ese' => array('ext_type', 'status', 'ext_id'),
+      'ese' => array('ext_type', 'status', 'uid'),
+    ),
+    'primary key' => array('cid'),
+  );
+  return $schema;
+}
+
+/**
+ * @Implement of hook_install()
+ */
+function comment_install() {
+  $ret = array();
+  $ret = module_install_schema('install', 'comment');
+  
+  return $ret;
+}
+
+/**
+ * @Implement of hook_uninstall()
+ */
+function comment_uninstall() {
+  $ret = array();
+  $ret = module_install_schema('uninstall', 'comment');
+  
+  db_exec('DELETE FROM {variable} WHERE name LIKE ?', array('comment_%'));
+  var_init();
+  
+  return $ret;
+}

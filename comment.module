@@ -1,0 +1,796 @@
+<?php
+// $Id$
+
+/**
+ * hook_comment_info() 默认设置
+ */
+function comment_default_info() {
+  return array(
+    'name' => '评论',  // 评论名称
+    'user_anonymous' => false, // 允许匿名评论，默认为 false
+    'user_anonymous_mail' => true, // 匿名评论必须输入邮箱，默认为 true
+    'user_anonymous_username' => true, // 匿名评论必须输入昵称，默认为 true
+    'user_anonymous_site' => false, // 匿名评论必须输入主页，默认为 false
+    'field_title' => true, // 启用标题，默认为 true
+    'field_title_required' => false, // 必须输入标题，默认为 false
+    'field_title_max' => 255, // 标题最大长度，不超过 255
+    'field_title_min' => 0, // 标题最小长度
+    'field_body_required' => true, // 必须输入评论内容，默认为 true
+    'field_body_max' => 50000, // 内容最大长度
+    'field_body_min' => 2, // 内容最小长度
+    'field_captcha_all' => false, // 针对所有人启用验证码，默认为 false
+    'field_captcha_anonymous' => true, // 针对匿名用户启用验证码，默认为 true
+    'captcha_image' => '55x16', // 图形验证码的宽高，若不使用图形验证码，赋值为 false
+    'filter_comment' => true, // 评论过滤，只看某某功能
+    'watermark' => false, // 通过编辑器上传的图片是否添加水印，默认 true | false
+    'captcha_type' => DIDA_CAPTCHA_TYPE_INT, // 验证码文本类型
+    'default_status' => 1, // 评论状态，默认为 0：未审核
+    // 'editor_html' => 0, // 加载  html 编辑器
+    // 'editor_text' => 0, // 加载 文本编辑器
+    // 'default_format' => 0, // 输入格式，留空则使用默认
+    // 'from_update_call' => 'function', // 载入编辑表单时回调函数，如： test(&$form, &$comment) { }
+    // 'from_insert_call' => 'function', // 载入添加表单时回调函数，如： test(&$form) { }
+  );
+}
+
+/**
+ * 获取模块定义的评论类型
+ * @param (string) $key
+ */
+function comment_get_comment_info($key) {
+  $info = NULL;
+  if ($infos = module_invoke_all('comment_info')) {
+    if ($infos[$key]) {
+      $info = array_merge(comment_default_info(), $infos[$key]);
+    }
+  }
+  
+  return $info;
+}
+
+/**
+ * 评论表单
+ * @param (object) $o
+ */
+function comment_form($o) {
+
+  if (!comment_is_create($o)) {
+    // 没有权限发布评论
+    return false;
+  }
+  
+  global $user;
+  
+  if ($user->uid == 0) {
+    $form['fields']['username'] = array(
+      '#title' => t('comment', '昵称'),
+      '#type' => 'textfield',
+      '#weight' => -100,
+      '#required' => $o->info['user_anonymous_username']
+    );
+    $form['fields']['mail'] = array(
+      '#title' => t('comment', '邮箱'),
+      '#type' => 'textfield',
+      '#weight' => -95,
+      '#attributes' => array(
+        'class' => "{email:true}"
+      ),
+      '#required' => $o->info['user_anonymous_mail']
+    );
+    $form['fields']['site'] = array(
+      '#title' => t('comment', '主页'),
+      '#type' => 'textfield',
+      '#weight' => -90,
+      '#required' => $o->info['user_anonymous_site'],
+      '#attributes' => array(
+        'class' => "{url:true}"
+      ),
+    );
+  } else {
+    $form['fields']['_name'] = array(
+      '#title' => t('comment', '昵称'),
+      '#weight' => -100,
+      '#value' => $user->name
+    );
+    $form['fields']['name'] = array(
+      '#type' => 'hidden',
+      '#constant' => 1,
+      '#default_value' => $user->name
+    );
+  }
+  
+  if ($o->info['field_title']) {
+    if ($o->info['field_title_min']) {
+      if ($o->info['field_title_min'] > 255) {
+        $rangelength[0] = 255;
+      } else {
+        $rangelength[0] = $o->info['field_title_min'];
+      }
+    } else {
+      $rangelength[0] = 0;
+    }
+    
+    if ($o->info['field_title_max']) {
+      if ($o->info['field_title_max'] > 255) {
+        $rangelength[1] = 255;
+      } else {
+        $rangelength[1] = $o->info['field_title_max'];
+      }
+    } else {
+      $rangelength[1] = 255;
+    }
+    
+    $form['fields']['title'] = array(
+      '#title' => t('comment', '标题'),
+      '#type' => 'textfield',
+      '#weight' => -80,
+      '#default_value' => $o->title,
+      '#required' => $o->info['field_title_required'],
+      '#attributes' => array(
+        'size' => 50,
+        'class' => '{rangelength: ['.$rangelength[0].', '.$rangelength[1].']}'
+      ),
+    );
+  }
+  
+  if ($o->info['field_body_min']) {
+    if ($o->info['field_body_min'] > 50000) {
+      $rangelength[0] = 50000;
+    } else {
+      $rangelength[0] = $o->info['field_body_min'];
+    }
+  } else {
+    $rangelength[0] = 0;
+  }
+  
+  if ($o->info['field_body_max']) {
+    if ($o->info['field_body_max'] > 50000) {
+      $rangelength[1] = 50000;
+    } else {
+      $rangelength[1] = $o->info['field_body_max'];
+    }
+  } else {
+    $rangelength[1] = 50000;
+  }
+
+  // 加载编辑器
+  _comment_get_form_editor($o);
+
+  // 转义 <textarea> 标签，防止编辑器破坏页面
+  if (!empty($o->body)) {
+    $o->body = str_replace(array('<textarea>', '</textarea>'), array('&lt;textarea&gt;', '&lt;/textarea&gt;'), $o->body);   
+  }
+
+  $form['fields']['body'] = array(
+    '#type' => 'textarea',
+    '#title' => t('comment', '内容'),
+    '#default_value' => $o->body,
+    '#weight' => -70,
+    '#required' => $o->info['field_body_required'],
+    '#attributes' => array(
+      'id' => 'comment_form_type_body',
+      'class' => '{rangelength: ['.$rangelength[0].', '.$rangelength[1].']}'
+    ),
+  );
+  
+  if ($o->info['field_captcha_all'] || ($user->uid == 0 && $o->info['field_captcha_anonymous'])) {
+    $form['fields']['captcha'] = array(
+      '#type' => 'captcha',
+      '#title' => t('blog', '验证'),
+      '#required' => 1,
+      '#captcha' => array(
+        'image' => $o->info['captcha_image'] ? $o->info['captcha_image'] : 0,
+        'type' => $o->info['captcha_type']
+      )
+    );
+  }
+  
+  $form['fields']['format'] = filter_form_field(isset($o->status) ? $o->status : $o->info['default_format'], 1);
+  
+  $form['fields']['cid'] = array(
+    '#type' => 'hidden',
+    '#default_value' => $o->cid,
+    '#constant' => 1
+  );
+  
+  $form['fields']['ext_id'] = array(
+    '#type' => 'hidden',
+    '#default_value' => isset($o->ext_id) ? $o->ext_id : 0,
+    '#constant' => 1
+  );
+  
+  $form['fields']['ext_id2'] = array(
+    '#type' => 'hidden',
+    '#default_value' => isset($o->ext_id2) ? $o->ext_id2 : 0,
+    '#constant' => 1
+  );
+  
+  $form['fields']['ext_type'] = array(
+    '#type' => 'hidden',
+    '#default_value' => $o->ext_type,
+    '#constant' => 1
+  );
+  
+  $form['fields']['status'] = array(
+    '#type' => 'hidden',
+    '#default_value' => isset($o->status) ? $o->status : $o->info['default_status'],
+    '#constant' => 1
+  );
+  
+  $form['fields']['uid'] = array(
+    '#type' => 'hidden',
+    '#default_value' => isset($o->uid) ? $o->uid : $user->uid,
+    '#constant' => 1
+  );
+  
+  $form['fields']['pid'] = array(
+    '#type' => 'hidden',
+    '#default_value' => isset($o->pid) ? $o->pid : 0,
+    '#constant' => 1
+  );
+  
+  $form['fields']['button'] = array(
+    '#type' => 'submit',
+    '#submit' => 'comment_form_submit',
+    '#weight' => 100,
+  );
+  
+  $form['settings'] = array(
+    '#ajax_validate' => 1,
+    '#values_object' => 1,
+    '#noCache' => 1,
+    '#redirect' => $o->redirect ? $o->redirect : NULL,
+    '#validate' => array('comment_form_validate'),
+  );
+  
+  $function = $o->cid ? $o->info['from_update_call'] : $o->info['from_insert_call'];
+  
+  if ($function && function_exists($function)) {
+    $function($form, $o);
+  }
+  
+  dd_add_css(dd_get_path('module', 'comment').'/comment.css');
+  return $form;
+}
+
+/**
+ * 评论表单编辑器
+ */
+function _comment_get_form_editor($o) {
+  /**
+   * 如果在评论表单中通过编辑器上传的文件，写入 files 表时，以下字段分别为：
+   * 	ext_type - comment
+   * 	ext_id - $comment->cid
+   *  ext_id2 - $comment->ext_id
+   */
+  global $form_tokens;
+  
+  if ($o->info['editor_html']) {
+    $file_url = url('files/editor', array('query' => 'op=ckeditor&name=upload&type=image&image_size=1600x1200'));
+    if (!empty($o->cid)) {
+      $file_url .= '&ext_type=comment&ext_id=' . $o->cid . '&ext_id2=' . $o->ext_id;
+    } else {
+      // 以 $form_token 做为关联条件，在评论保存时做关。若上传了文件，但评论未保存，状态为 status，在 cron 时清理
+      $file_url .= '&status=-1&ext_id2=' . $o->ext_id . '&ext_type=' . $form_tokens['comment_form'];
+    }
+
+    if (empty($o->info['watermark'])) {
+      $file_url .= '&watermark=no';
+    }
+
+    $editor_config = array(
+      'toolbar' => 'small',
+      'upload_image' => 1,
+      'filebrowserImageUploadUrl' => $file_url,
+      'height' => 200, 
+    );
+    
+    if (is_array($o->info['editor_html'])) {
+      $editor_config = array_merge($editor_config, $o->info['editor_html']);
+    }
+    
+    dd_get_editor('comment_form_type_body', $editor_config);
+    
+  } else if ($o->info['editor_text']) {
+    $file_url = url('files/editor', array('query' => 'op=markitup&name=upload&type=image&image_size=1600x1200'));
+    if (!empty($o->cid)) {
+      $file_url .= '&ext_type=comment&ext_id=' . $o->cid . '&ext_id2=' . $o->ext_id;
+    } else {
+      // 以 $form_token 做为关联条件，在评论保存时做关。若上传了文件，但评论未保存，状态为 status，在 cron 时清理
+      $file_url .= '&status=-1&ext_id2=' . $o->ext_id . '&ext_type=' . $form_tokens['comment_form'];
+    }
+    
+    if (empty($o->info['watermark'])) {
+      $file_url .= '&watermark=no';
+    }
+
+    $editor_config = array(
+      'upload' => true,
+      'filebrowserImageUploadUrl' => $file_url,
+      'filebrowserUploadUrl' => $file_url,
+      'upload_image' => true,
+      'options' => array(
+        'height' => 200,
+        'previewParserPath' => f('custom.php?module=comment&op=preview&bootstrap=full')
+      )
+    );
+    
+    if (is_array($o->info['editor_text'])) {
+      $editor_config = array_merge($editor_config, $o->info['editor_text']);
+    }
+    
+    // 加载文本编辑器
+    dd_get_editor_text('#comment_form_type_body', 'html', $editor_config);
+  }
+
+}
+
+function comment_form_validate(&$form, &$v) {
+  return comment_validate($v['_dida_values']);
+}
+
+function comment_form_submit(&$form, &$v) {
+  if (comment_save($v['_dida_values'])) {
+    if ($v['_dida_values']->status > 0) {
+      
+      if ($v['_dida_values']->_db_write_record_is_update) {
+        $message = t('comment', '评论更新成功');
+      } else {
+        // 将文件关联到评论
+        db_exec('UPDATE {files} SET ext_type = ?, ext_id = ?, status = 1 WHERE ext_type = ?', 
+        array('comment', $v['_dida_values']->cid, $form['#form_token']));
+        $message = t('comment', '评论发布成功');
+      }
+      
+      if (!isset($form['settings']['#redirect'])) {
+        
+        if ($v['_dida_values']->redirect) {
+          $form['settings']['#redirect'] = $v['_dida_values']->redirect;
+        } else {
+          $form['settings']['#redirect'] = url($_GET['q'], array(
+            'query' => ($v['_dida_values']->go_pager ? 'page='.$v['_dida_values']->go_pager : ''),
+            'fragment' => 'comment_'.$v['_dida_values']->ext_type.'_'.$v['_dida_values']->cid
+          ));
+        }
+        
+      }
+      
+    } else {
+      $message = t('comment', '评论保存成功，正在等待审核');
+    }
+    
+  } else {
+    $message = t('comment', '保存失败');
+  }
+  
+  dd_set_message($message);
+}
+
+function comment_validate(&$comment) {
+  $error = NULL;
+  if ($info = comment_get_comment_info($comment->ext_type)) {
+    if ($comment->title) {
+      $strlen = mb_strlen($comment->title);
+      if ($strlen > $info['field_title_max']) {
+        $error['title']['#error'][] = t('comment', '标题长度最大 !strlen 字符', array('!strlen' => $info['field_title_max']));
+      } else if ($strlen < $info['field_title_min']) {
+        $error['title']['#error'][] = t('comment', '标题长度最小 !strlen 字符', array('!strlen' => $info['field_title_min']));
+      }
+    } else if ($comment->body) {
+      $strlen = mb_strlen($comment->body);
+      if ($strlen > $info['field_body_max']) {
+        $error['body']['#error'][] = t('comment', '内容长度最大 !strlen 字符', array('!strlen' => $info['field_body_max']));
+      } else if ($strlen < $info['field_body_min']) {
+        $error['body']['#error'][] = t('comment', '内容长度最小 !strlen 字符', array('!strlen' => $info['field_body_min']));
+      }
+    }
+  }
+  
+  if (!$error) {
+    module_invoke_all('comment_validate', $comment);
+  }
+  
+  return $error;
+}
+
+function comment_save(&$comment) {
+  if (!isset($comment->updated)) {
+    $comment->updated = $_SERVER['REQUEST_TIME'];
+  }
+  
+  if ($comment->cid) {
+    $args = array('cid');
+    $comment->op = 'update';
+  } else {
+    if (!isset($comment->created)) {
+      $comment->created = $_SERVER['REQUEST_TIME'];
+    }
+    $args = NULL;
+    $comment->op = 'insert';
+    $comment->host = ip_address();
+  }
+  
+  if (db_write_record('comment', $comment, $args)) {
+    module_invoke_all('comment_save', $comment);
+    return true;
+  }
+  
+}
+
+/**
+ * 加载评论对象
+ * @param (int) $cid
+ */
+function comment_load($cid) {
+  static $comments;
+  
+  if (!isset($comments[$cid])) {
+    if ($comments[$cid] = db_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u 
+    ON c.uid = u.uid WHERE c.cid = ?', array($cid), array('return' => 'one'))) {
+      if ($comments[$cid]->data) {
+        $comments[$cid]->data = unserialize($o->data);
+      } else {
+        $comments[$cid]->data = array();
+      }
+      module_alter_all('comment_load', $comments[$cid]);
+    }
+  }
+  
+  return $comments[$cid];
+}
+
+/**
+ * 删除评论，不检查权限，调用此函数应先使用 comment_is_delete() 检查权限
+ * @param (int|object) $cid
+ * 	评论 id 或一个评论对象
+ * @return (bool)
+ */
+function comment_delete($comment) {
+  if (!is_object($comment)) $comment = comment_load($comment);
+  if (!empty($comment->cid)) {
+    if (db_exec('DELETE FROM {comment} WHERE cid = ?', array($comment->cid))) {
+      // 删除与评论关联的文件
+      if ($fetch = db_query('SELECT fid, filepath FROM {files} WHERE ext_type = ? AND ext_id = ?',
+      array('comment', $comment->cid))) {
+        foreach ($fetch as $o) {
+          file_delete($o->fid, 1, $o->filepath);
+        }
+        db_exec('DELETE FROM {files} WHERE ext_type = ? AND ext_id = ?', array('comment', $comment->cid));
+      }
+      module_invoke_all('comment_delete', $comment);
+      return true;
+    }
+  }
+}
+
+/**
+ * 验证评论浏览权限。浏览权限由所属节点控制，本函数内只验证评论状态
+ * @param (object) $comment
+ */
+function comment_is_view($comment) {
+  return $comment->status > 0;
+}
+
+/**
+ * 验证评论删除权限
+ * @param (object) $comment
+ */
+function comment_is_delete($comment) {
+  if (empty($GLOBALS['user']->uid)) return false;
+
+  // 默认不允许，可在 hook_comment_is_delete 中将 $o->is_delete 设为 true
+  $comment->is_delete = false;
+
+  module_invoke_all('comment_is_delete', $comment);
+  
+  return $comment->is_delete;
+}
+
+/**
+ * 验证评论编辑权限
+ * @param (object) $comment
+ */
+function comment_is_update($comment) {  
+  if (empty($GLOBALS['user']->uid)) return false;
+
+  // 默认不允许，可在 hook_comment_is_update 中将 $o->is_update 设为 true
+  $comment->is_update = false;
+
+  module_invoke_all('comment_is_update', $comment);
+  
+  return $comment->is_update;
+}
+
+/**
+ * 验证当前用户是否有权限发布评论
+ * @param (object) $o
+ *  扩展信息
+ */
+function comment_is_create($o) {
+  if (!isset($o->ext_type)) {
+    // 必须有扩展类型
+    return false;
+  }
+  
+  if (!$o->info = comment_get_comment_info($o->ext_type)) {
+    // 评论接口信息不存在， hook_comment_info() 必须定义
+    return false;
+  }
+  
+  if (!$o->info['user_anonymous'] && $GLOBALS['user']->uid == 0) {
+    // 匿名用户不允许评论
+    return false;
+  }
+
+  // 默认不允许，可在 hook_comment_is_create 中将 $o->is_create 设为 true
+  $o->is_create = false;
+
+  module_invoke_all('comment_is_create', $o);
+  
+  return $o->is_create;
+}
+
+/**
+ * 根据扩展类型、扩展 id 获取评论
+ * @param (string) $ext_type
+ *  扩展类型
+ * @param (int) $ext_id
+ *  扩展 id
+ * @param (int) $count
+ *  获取数量
+ * @param (bool) $pager
+ *  是否分页
+ * @param (string) $order
+ *  评论排序
+ * @param (string) $sql_suffix
+ *  附加 sql
+ */
+function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true, $order = 'ASC', $sql_suffix = NULL) {
+  
+  $type_info = comment_get_comment_info($ext_type);
+  
+  if (!empty($_GET['filter_comment']) && is_numeric($_GET['filter_comment'])) {
+    $sql_suffix .= ' AND c.uid = ' . $_GET['filter_comment'];
+  }
+  
+  if (isset($ext_id)) {
+    if ($pager) {
+      $fetch = pager_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid 
+      WHERE c.ext_type = ? AND c.status > 0 AND c.ext_id = ? ' . $sql_suffix . ' ORDER BY c.cid '.$order,
+      $count, 0, NULL, array($ext_type, $ext_id));
+    } else {
+      $fetch = db_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid 
+      WHERE c.ext_type = ? AND c.status > 0 AND c.ext_id = ? ' . $sql_suffix . ' ORDER BY c.cid '.$order,
+      array($ext_type, $ext_id), array('limit' => $count));
+    }
+  } else {
+    if ($pager) {
+      $fetch = pager_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid 
+      WHERE c.ext_type = ? AND c.status > 0 ' . $sql_suffix . ' ORDER BY c.cid '.$order,
+      $count, 0, NULL, array($ext_type));
+    } else {
+      $fetch = db_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid 
+      WHERE c.ext_type = ? AND c.status > 0 ' . $sql_suffix . ' ORDER BY c.cid '.$order,
+      array($ext_type), array('limit' => $count));
+    }
+  }
+  
+  if ($fetch) {
+    
+    $create = new stdClass;
+    $create->ext_type = $ext_type;
+    $create->ext_id = $ext_id;
+    
+    $is_create = comment_is_create($create);
+    $data->view = '<div id="comment_view_wrapper">';
+    $i = 1;
+    foreach ($fetch as $o) {
+      if ($o->data) {
+        $o->data = unserialize($o->data);
+      } else {
+        $o->data =  array();
+      }
+      
+      $o->count = $_GET['page']*$count+$i;
+      $o->body = filter_view($o->body, $o->format);
+      
+      $o->links = '';
+      
+      if (comment_is_update($o)) {
+        $o->links .= l(t('forum', '编辑'), 'comment/edit/'.$o->cid);
+      }
+      if (comment_is_delete($o)) {
+        $o->links .= l(t('forum', '删除'), 'comment/delete/'.$o->cid,
+        array('attributes' => array('class' => 'confirm')));
+      }
+      
+      if ($type_info['filter_comment']) {
+        if (empty($_GET['filter_comment'])) {
+          $o->filter_comment = url($_GET['q'], array('query' => 'filter_comment=' . $o->uid));
+        } else {
+          $o->filter_comment_all = url($_GET['q']);
+        }
+      }
+      
+      module_alter_all('comment_view', $o);
+      
+      $o->is_create = $is_create;
+      $data->view .= theme('comment', $o);
+      
+      ++$i;
+    }
+    
+    $data->view .= '</div>';
+    
+    if ($pager) {
+      // 评论翻页参数
+      $data->pager = pager_view(array(), $count, 0, NULL, 7, array('fragment' => 'comment_view_wrapper'));
+    }
+    
+  }
+  
+  dd_add_js(dd_get_path('module', 'comment').'/comment.js');
+  dd_add_css(dd_get_path('module', 'comment').'/comment.css');
+  return $data;
+}
+
+/**
+ * @Implement of hook_theme()
+ */
+function comment_theme() {
+  return array(
+    'comment' => array(
+      'tpl' => 'comment.tpl.php',
+      'title' => t('forum', '评论模块'),
+      'args' => array('comment'),
+    ),
+  );
+}
+
+/**
+ * @Implement of hook_template_preprocess_x()
+ * 
+ * 评论可按扩展类型创建模板文件：
+ * comment_{$comment->ext_type}.tpl.php
+ * comment.tpl.php
+ * 
+ */
+function comment_template_preprocess_comment(&$var, $hook) {
+  if ($var['comment']->ext_type) {
+    $var['theme_config']->tpl[] = 'comment_'.$var['comment']->ext_type.'.tpl.php';
+  } 
+}
+
+/**
+ * @Implement of hook_menu()
+ */
+function comment_menu() {
+  $items = array();
+  $items['comment/edit/%'] = array(
+    'load_functions' => array(2 => array('comment_load')),
+    'description' => '编辑评论',
+    'access_callback' => 'comment_is_update',
+    'access_arguments' => array(2),
+    'page_callback' => 'comment_page_edit',
+    'page_arguments' => array(2),
+    'file' => 'comment.page.inc',
+  );
+  $items['comment/delete/%'] = array(
+    'load_functions' => array(2 => array('comment_load')),
+    'description' => '删除评论',
+    'access_callback' => 'comment_is_delete',
+    'access_arguments' => array(2),
+    'page_callback' => 'comment_page_delete',
+    'page_arguments' => array(2),
+    'file' => 'comment.page.inc',
+  );
+  $items['comment/goto/%'] = array(
+    'load_functions' => array(2 => array('comment_load')),
+    'description' => '根据评论 id 跳转到所属节点',
+    'access_callback' => 'comment_is_view',
+    'access_arguments' => array(2),
+    'page_callback' => 'comment_page_goto',
+    'page_arguments' => array(2),
+    'file' => 'comment.page.inc',
+  );
+  $items['admin/comment'] = array(
+    'title' => '评论管理',
+    'access_arguments' => array('comment admin view'),
+    'page_callback' => 'comment_admin_page',
+    'file' => 'comment.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * @Implement of hook_perm()
+ */
+function comment_perm() {
+  return array(
+    'comment admin view' => '管理所有评论',
+  );
+}
+
+/**
+ * @Implement of hook_filter()
+ */
+function comment_filter($op, $delta = NULL, $format = NULL, $value = NULL, $filter_id = NULL, $node_type = NULL, $node_nid = NULL) {
+  switch ($op) {
+    case 'view':
+      
+      if ($delta == 0 && strpos($value, '[comment@') !== false) {
+        $value = preg_replace_callback('/\[comment@(.*?)=(.*?)\]/i', '_comment_filter_get_link', $value);
+        dd_jqui();
+      }
+      
+    return $value;
+    case 'list':
+    return array(
+      array(
+        'title' => t('comment', '评论回复'),
+        'description' => t('comment', '将评论中的 类似 [comment@昵称=cid] 的标签解析为指向该评论的链接')
+      )
+    );
+  }
+}
+
+/**
+ * 将 [comment@用户名字=cid] 标签转为链接
+ * @param $mat
+ */
+function _comment_filter_get_link($mat) {
+  if ($mat[2]) {
+    return l('@'.$mat[1], f('custom.php?module=comment&iframe=true&op=load&bootstrap=full&cid='.$mat[2]), array(
+      'attributes' => array(
+        'class' => 'dialog',
+        'alt' => t('comment', '回复 !name', array('!name' => $mat[1])),
+        'title' => t('comment', '查看评论'),
+      )
+    ));
+  }
+}
+
+/**
+ * @Implement of hook_call_custom()
+ */
+function comment_call_custom($v) {
+  
+  switch ($v['op']) {
+    case 'preview': // 预览
+      if ($v['bootstrap'] == 'full') {
+        if ($_POST['data']) {
+          // 预览中不允许使用 php 代码执行器
+          echo theme('print', filter_view(str_replace('<?php', '&lt;?php', $_POST['data']), $_POST['format']));
+          exit;
+        }
+      }
+    break;
+    
+    case 'load':
+      if ($v['cid'] && $v['bootstrap'] == 'full') {
+        
+        if ($comment = db_query('SELECT cid, body, status, name, format, ext_type, created FROM {comment} WHERE cid = ?',
+        array($v['cid']), array('return' => 'one'))) {
+          
+          if ($comment->status) {
+            dd_add_css(dd_get_path('module', 'comment').'/comment.css');
+            $content = '<p class="comment_header">' . t('comment', '!name 发布于 !time', array('!name' => $comment->name, '!time' => format_date($comment->created))) . '</p>';
+            $content .= '<p class="comment_body">'. filter_view($comment->body, $o->format, 'comment_'.$comment->ext_type, $comment->cid). '</p>';
+            echo theme('print', $content);
+            
+          } else {
+            
+            echo t('comment', '评论未通过审核');
+            
+          }
+        }
+        
+      } else {
+        echo t('comment', '无效的评论 ID');
+      }
+      
+    break;
+  }
+  
+  exit;
+}
