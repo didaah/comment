@@ -1,5 +1,5 @@
 <?php
-// $Id: comment.admin.inc 354 2011-02-10 01:09:35Z yangdong $
+// $Id$
 
 function comment_admin_page() {
   
