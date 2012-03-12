@@ -31,12 +31,12 @@ class="comment_view comment_view_<?php echo $zebra; ?> comment_view_<?php echo $
     <?php if ($comment->is_create) :?>
     - <a href="#comment_form" rel="nofollow" class="comment_quote" alt="<?php echo $comment->cid; ?>">#引用</a>
      | <a href="#comment_form" class="comment_reply" alt="<?php echo $comment->cid; ?>" rel="nofollow">#回复</a>
-     <?php if ($comment->filter_comment) { ?>
-     | <a title="只看<?php echo $comment->name; ?>的评论" href="<?php echo $comment->filter_comment; ?>" rel="nofollow">#只看<?php echo $comment->name; ?></a>
-     <?php } else if ($comment->filter_comment_all) {?>
-     | <a title="返回全部评论" href="<?php echo $comment->filter_comment_all; ?>" rel="nofollow">#返回全部评论</a>
-     <?php }?>
     <?php endif ?>
+    <?php if ($comment->filter_comment) { ?>
+    | <a title="只看<?php echo $comment->name; ?>的评论" href="<?php echo $comment->filter_comment; ?>#comment_view_wrapper" rel="nofollow">#只看<?php echo $comment->name; ?></a>
+    <?php } else if ($comment->filter_comment_all) {?>
+    | <a title="返回全部评论" href="<?php echo $comment->filter_comment_all; ?>#comment_view_wrapper" rel="nofollow">#返回全部评论</a>
+    <?php }?>
   </p>
   <div class="comment_body"><?php echo $comment->body; ?></div>
   

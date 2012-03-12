@@ -62,7 +62,7 @@ function comment_form($o) {
   global $user;
   
   if ($user->uid == 0) {
-    $form['fields']['username'] = array(
+    $form['fields']['name'] = array(
       '#title' => t('comment', '昵称'),
       '#type' => 'textfield',
       '#weight' => -100,
@@ -548,33 +548,41 @@ function comment_is_create($o) {
 function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true, $order = 'ASC', $sql_suffix = NULL) {
   
   $type_info = comment_get_comment_info($ext_type);
+
+  $query = 'SELECT c.* FROM {comment} c';
   
-  if (!empty($_GET['filter_comment']) && is_numeric($_GET['filter_comment'])) {
-    $sql_suffix .= ' AND c.uid = ' . $_GET['filter_comment'];
+  if (!empty($_GET['filter_comment'])) { 
+    $query .= ' INNER JOIN {users} u ON c.uid = u.uid';
   }
   
+  $args = array($ext_type);
+
   if (isset($ext_id)) {
-    if ($pager) {
-      $fetch = pager_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid 
-      WHERE c.ext_type = ? AND c.status > 0 AND c.ext_id = ? ' . $sql_suffix . ' ORDER BY c.cid '.$order,
-      $count, 0, NULL, array($ext_type, $ext_id));
-    } else {
-      $fetch = db_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid 
-      WHERE c.ext_type = ? AND c.status > 0 AND c.ext_id = ? ' . $sql_suffix . ' ORDER BY c.cid '.$order,
-      array($ext_type, $ext_id), array('limit' => $count));
-    }
+    $query .= ' WHERE c.ext_type = ? AND c.status > 0 AND c.ext_id = ? ';
+    $args[] = $ext_id;
   } else {
-    if ($pager) {
-      $fetch = pager_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid 
-      WHERE c.ext_type = ? AND c.status > 0 ' . $sql_suffix . ' ORDER BY c.cid '.$order,
-      $count, 0, NULL, array($ext_type));
-    } else {
-      $fetch = db_query('SELECT c.*, u.name FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid 
-      WHERE c.ext_type = ? AND c.status > 0 ' . $sql_suffix . ' ORDER BY c.cid '.$order,
-      array($ext_type), array('limit' => $count));
-    }
+    $query .= ' WHERE c.ext_type = ? AND c.status > 0';
   }
   
+  if (!empty($_GET['filter_comment'])) { 
+    if (is_numeric($_GET['filter_comment'])) {
+      $query .= ' AND c.uid = ?';
+    } else { 
+      $query .= ' AND c.name = ?';
+    }
+    $args[] = $_GET['filter_comment'];
+  }
+ 
+  $query .= $sql_suffix;
+
+  $query .= ' ORDER BY c.cid ' . $order;
+
+  if ($pager) {
+    $fetch = pager_query($query, $count, 0, NULL, $args);
+  } else {
+    $fetch = db_query($query, $args, array('limit' => $count));
+  }
+
   if ($fetch) {
     
     $create = new stdClass;
@@ -606,7 +614,7 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
       
       if ($type_info['filter_comment']) {
         if (empty($_GET['filter_comment'])) {
-          $o->filter_comment = url($_GET['q'], array('query' => 'filter_comment=' . $o->uid));
+          $o->filter_comment = url($_GET['q'], array('query' => 'filter_comment=' . ($o->uid ? $o->uid : $o->name)));
         } else {
           $o->filter_comment_all = url($_GET['q']);
         }
