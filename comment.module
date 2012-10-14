@@ -11,6 +11,10 @@ function comment_default_info() {
     'user_anonymous_mail' => true, // 匿名评论必须输入邮箱，默认为 true
     'user_anonymous_username' => true, // 匿名评论必须输入昵称，默认为 true
     'user_anonymous_site' => false, // 匿名评论必须输入主页，默认为 false
+    'user_mail' => false, // 登录用户是否可以输入邮箱，默认为 false
+    'user_site' => false, // 登录用户是否可以输入主页，默认为 false
+    'user_mail_required' => false, // 登录用户是否必须输入邮箱
+    'user_site_required' => false, // 登录用户是否必须输入主页
     'field_title' => true, // 启用标题，默认为 true
     'field_title_required' => false, // 必须输入标题，默认为 false
     'field_title_max' => 255, // 标题最大长度，不超过 255
@@ -20,16 +24,19 @@ function comment_default_info() {
     'field_body_min' => 2, // 内容最小长度
     'field_captcha_all' => false, // 针对所有人启用验证码，默认为 false
     'field_captcha_anonymous' => true, // 针对匿名用户启用验证码，默认为 true
-    'captcha_image' => '55x16', // 图形验证码的宽高，若不使用图形验证码，赋值为 false
+    'number_desc' => false, // 评论列表编号顺序，默认为正序，从 1 到 100，设置为 true 则为倒序，从 100 到 1
+    'captcha' => array(
+      //'image' => 1, // 0：文字验证码，1、图片验证码
+      //'type' => DIDA_CAPTCHA_TYPE_INT, // 验证码文本类型
+     ),
     'filter_comment' => true, // 评论过滤，只看某某功能
+    'comment_quote' => true, // 评论引用
+    'comment_reply' => true, // 评论回复
     'watermark' => false, // 通过编辑器上传的图片是否添加水印，默认 true | false
-    'captcha_type' => DIDA_CAPTCHA_TYPE_INT, // 验证码文本类型
     'default_status' => 1, // 评论状态，默认为 0：未审核
     // 'editor_html' => 0, // 加载  html 编辑器
     // 'editor_text' => 0, // 加载 文本编辑器
     // 'default_format' => 0, // 输入格式，留空则使用默认
-    // 'from_update_call' => 'function', // 载入编辑表单时回调函数，如： test(&$form, &$comment) { }
-    // 'from_insert_call' => 'function', // 载入添加表单时回调函数，如： test(&$form) { }
   );
 }
 
@@ -59,7 +66,7 @@ function comment_form($o) {
     return false;
   }
   
-  global $user;
+  global $user, $conf;
   
   if ($user->uid == 0) {
     $form['fields']['name'] = array(
@@ -68,6 +75,7 @@ function comment_form($o) {
       '#weight' => -100,
       '#required' => $o->info['user_anonymous_username']
     );
+
     $form['fields']['mail'] = array(
       '#title' => t('comment', '邮箱'),
       '#type' => 'textfield',
@@ -77,6 +85,7 @@ function comment_form($o) {
       ),
       '#required' => $o->info['user_anonymous_mail']
     );
+
     $form['fields']['site'] = array(
       '#title' => t('comment', '主页'),
       '#type' => 'textfield',
@@ -92,11 +101,38 @@ function comment_form($o) {
       '#weight' => -100,
       '#value' => $user->name
     );
+
     $form['fields']['name'] = array(
       '#type' => 'hidden',
       '#constant' => 1,
       '#default_value' => $user->name
     );
+
+    if (!empty($o->info['user_mail'])) {
+      $form['fields']['mail'] = array(
+        '#title' => t('comment', '邮箱'),
+        '#type' => 'textfield',
+        '#weight' => -95,
+        '#default_value' => $user->mail,
+        '#attributes' => array(
+        '#required' => $o->info['user_mail_required'],
+          'class' => "{email:true}"
+        ),
+      );
+    }
+
+    if (!empty($o->info['user_site'])) {
+      $form['fields']['site'] = array(
+        '#title' => t('comment', '主页'),
+        '#type' => 'textfield',
+        '#weight' => -90,
+        '#required' => $o->info['user_site_required'],
+        '#attributes' => array(
+          'class' => "{url:true}"
+        ),
+      );
+    }
+
   }
   
   if ($o->info['field_title']) {
@@ -169,19 +205,27 @@ function comment_form($o) {
     '#required' => $o->info['field_body_required'],
     '#attributes' => array(
       'id' => 'comment_form_type_body',
-      'class' => '{rangelength: ['.$rangelength[0].', '.$rangelength[1].']}'
+      'class' => '{rangelength: [' . $rangelength[0] . ', ' . $rangelength[1] . ']}'
     ),
   );
   
   if ($o->info['field_captcha_all'] || ($user->uid == 0 && $o->info['field_captcha_anonymous'])) {
+  
+    if (!empty($conf['captcha']['comment'])) {
+      $captcha = $conf['captcha']['comment'];
+    } else {
+      $captcha = array();
+    }
+
+    if (!empty($o->info['captcha'])) {
+      $captcha = array_merge($captcha, $o->info['captcha']);
+    }
+    
     $form['fields']['captcha'] = array(
       '#type' => 'captcha',
       '#title' => t('blog', '验证'),
       '#required' => 1,
-      '#captcha' => array(
-        'image' => $o->info['captcha_image'] ? $o->info['captcha_image'] : 0,
-        'type' => $o->info['captcha_type']
-      )
+      '#captcha' => $captcha,
     );
   }
   
@@ -242,15 +286,32 @@ function comment_form($o) {
     '#redirect' => $o->redirect ? $o->redirect : NULL,
     '#validate' => array('comment_form_validate'),
   );
-  
+
+  // @TODO 该参数将废弃，统一使用 hook_comment_form()
   $function = $o->cid ? $o->info['from_update_call'] : $o->info['from_insert_call'];
-  
+
   if ($function && function_exists($function)) {
     $function($form, $o);
   }
+
+  module_alter_all('comment_form', $form, $o);
   
   dd_add_css(dd_get_path('module', 'comment').'/comment.css');
   return $form;
+}
+
+/**
+ * @Implement of hook_system_site_captcha()
+ */
+function comment_system_site_captcha($op) {
+  if ($op == 'fields') {
+    return array(
+      'comment' => array(
+        'title' => t('user', '评论'),
+        'attributes' => array('#disabled' => 1, '#default_value' => 1, '#required' => false),
+      ),
+    );
+  }
 }
 
 /**
@@ -334,12 +395,12 @@ function comment_form_submit(&$form, &$v) {
     if ($v['_dida_values']->status > 0) {
       
       if ($v['_dida_values']->_db_write_record_is_update) {
-        $message = t('comment', '评论更新成功');
+        $message = t('comment', '更新成功');
       } else {
         // 将文件关联到评论
         db_exec('UPDATE {files} SET ext_type = ?, ext_id = ?, status = 1 WHERE ext_type = ?', 
         array('comment', $v['_dida_values']->cid, $form['#form_token']));
-        $message = t('comment', '评论发布成功');
+        $message = t('comment', '发布成功');
       }
       
       if (!isset($form['settings']['#redirect'])) {
@@ -356,7 +417,7 @@ function comment_form_submit(&$form, &$v) {
       }
       
     } else {
-      $message = t('comment', '评论保存成功，正在等待审核');
+      $message = t('comment', '保存成功，正在等待审核');
     }
     
   } else {
@@ -387,7 +448,7 @@ function comment_validate(&$comment) {
   }
   
   if (!$error) {
-    module_invoke_all('comment_validate', $comment);
+    $error = module_invoke_all('comment_validate', $comment);
   }
   
   return $error;
@@ -464,16 +525,26 @@ function comment_delete($comment) {
 }
 
 /**
- * 验证评论浏览权限。浏览权限由所属节点控制，本函数内只验证评论状态
- * @param (object) $comment
+ * 验证评论浏览权限
+ * @param object $comment
+ * @return bool
  */
 function comment_is_view($comment) {
-  return $comment->status > 0;
+ 
+  // 默认允许，可在 hook_comment_is_view 中将 $o->is_view 设为 false
+  if ($comment->status > 0) {
+    $comment->is_view = true;
+
+    module_invoke_all('comment_is_view', $comment);
+    
+    return $comment->is_view;
+  } 
 }
 
 /**
  * 验证评论删除权限
- * @param (object) $comment
+ * @param object $comment
+ * @return bool
  */
 function comment_is_delete($comment) {
   if (empty($GLOBALS['user']->uid)) return false;
@@ -488,7 +559,8 @@ function comment_is_delete($comment) {
 
 /**
  * 验证评论编辑权限
- * @param (object) $comment
+ * @param object $comment
+ * @return bool
  */
 function comment_is_update($comment) {  
   if (empty($GLOBALS['user']->uid)) return false;
@@ -503,8 +575,9 @@ function comment_is_update($comment) {
 
 /**
  * 验证当前用户是否有权限发布评论
- * @param (object) $o
- *  扩展信息
+ * @param object $o
+ *  评论设置相关信息
+ * @return bool
  */
 function comment_is_create($o) {
   if (!isset($o->ext_type)) {
@@ -579,8 +652,11 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
 
   if ($pager) {
     $fetch = pager_query($query, $count, 0, NULL, $args);
+    global $pager_page_array, $pager_total, $pager_total_items;
+    $rows_count = $pager_total_items[0];
   } else {
     $fetch = db_query($query, $args, array('limit' => $count));
+    $rows_count = $count;
   }
 
   if ($fetch) {
@@ -593,6 +669,7 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
     $data->view = '<div id="comment_view_wrapper">';
     $i = 1;
     foreach ($fetch as $o) {
+      
       if ($o->data) {
         $o->data = unserialize($o->data);
       } else {
@@ -600,6 +677,12 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
       }
       
       $o->count = $_GET['page']*$count+$i;
+
+      // 倒序
+      if (!empty($type_info['number_desc'])) {
+        $o->count = $rows_count-$o->count+1;
+      }
+
       $o->body = filter_view($o->body, $o->format);
       
       $o->links = '';
@@ -619,7 +702,15 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
           $o->filter_comment_all = url($_GET['q']);
         }
       }
+
+      if ($type_info['comment_reply']) {
+        $o->comment_reply = true;
+      }
       
+      if ($type_info['comment_quote']) {
+        $o->comment_quote = true;
+      }
+
       module_alter_all('comment_view', $o);
       
       $o->is_create = $is_create;

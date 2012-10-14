@@ -12,12 +12,12 @@ function comment_page_delete($comment) {
       echo 'ok';
       exit;
     }
-    dd_set_message('删除成功');
+    dd_set_message(t('comment', '删除成功'));
   } else if (!empty($_GET['ajax'])) {
     echo 'error';
     exit;
   } else {
-    dd_set_message('删除失败', 'error');
+    dd_set_message(t('comment', '删除失败'), 'error');
   }
   
   if (!empty($_GET['redirect'])) {

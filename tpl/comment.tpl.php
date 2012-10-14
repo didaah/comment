@@ -29,8 +29,12 @@ class="comment_view comment_view_<?php echo $zebra; ?> comment_view_<?php echo $
     - <?php echo $comment->title; ?>
     <?php endif?>
     <?php if ($comment->is_create) :?>
-    - <a href="#comment_form" rel="nofollow" class="comment_quote" alt="<?php echo $comment->cid; ?>">#引用</a>
-     | <a href="#comment_form" class="comment_reply" alt="<?php echo $comment->cid; ?>" rel="nofollow">#回复</a>
+      <?php if ($comment->comment_quote) : ?>
+      - <a href="#comment_form" rel="nofollow" class="comment_quote" alt="<?php echo $comment->cid; ?>">#引用</a>
+      <?php endif ?>
+      <?php if ($comment->comment_reply) : ?>
+         | <a href="#comment_form" class="comment_reply" alt="<?php echo $comment->cid; ?>" rel="nofollow">#回复</a>
+        <?php endif ;?>
     <?php endif ?>
     <?php if ($comment->filter_comment) { ?>
     | <a title="只看<?php echo $comment->name; ?>的评论" href="<?php echo $comment->filter_comment; ?>#comment_view_wrapper" rel="nofollow">#只看<?php echo $comment->name; ?></a>
