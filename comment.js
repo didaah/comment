@@ -14,6 +14,9 @@ $(function() {
 	        q = n + q + "\n------------------------------------------\n";
 	        var v = $('#comment_form_type_body').val();
 	        $('#comment_form_type_body').val(v + q);
+          setTimeout(function() {
+	          $('#comment_form_type_body').focus();
+          }, 200);
 	      }
     	}
     }
@@ -28,6 +31,9 @@ $(function() {
 	    	var n = root.find('.comment_name').eq(0).text();
 	      n = '[comment@' + n.replace(/\s/ig, '')+'='+cid+']';
 	      $('#comment_form_type_body').val($('#comment_form_type_body').val() + n);
+        setTimeout(function() {
+          $('#comment_form_type_body').focus();
+        }, 200);
     	}
     }
   });
