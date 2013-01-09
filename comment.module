@@ -34,25 +34,29 @@ function comment_default_info() {
     'comment_reply' => true, // 评论回复
     'watermark' => false, // 通过编辑器上传的图片是否添加水印，默认 true | false
     'default_status' => 1, // 评论状态，默认为 0：未审核
-    // 'editor_html' => 0, // 加载  html 编辑器
-    // 'editor_text' => 0, // 加载 文本编辑器
+    'editor' => true, // bool|array true 为启用编辑，或直接使用 array 设置默认编辑器配置，该配置可由管理员在后台修改，依赖于 editor 模块
     // 'default_format' => 0, // 输入格式，留空则使用默认
   );
 }
 
 /**
- * 获取模块定义的评论类型
- * @param (string) $key
+ * 获取指定或全部评论类型
+ * @param string $key
+ *  指定评论类型
  */
-function comment_get_comment_info($key) {
-  $info = NULL;
-  if ($infos = module_invoke_all('comment_info')) {
-    if ($infos[$key]) {
-      $info = array_merge(comment_default_info(), $infos[$key]);
+function comment_get_comment_info($key = NULL) {
+  static $data;
+
+  if (!isset($data)) {
+    $default = comment_default_info();
+    if ($infos = module_invoke_all('comment_info')) {
+      foreach ($infos as $name => $info) {
+        $data[$name] = array_merge($default, $info);
+      }
     }
   }
   
-  return $info;
+  return $key ? $data[$key] : $data;
 }
 
 /**
@@ -66,6 +70,17 @@ function comment_form($o) {
     return false;
   }
   
+  if ($datas = comment_get_comment_info()) {
+    // 隐藏其它评论类型的编辑器实例
+    global $editor_disabled;
+    foreach ($datas as $name => $i) {
+      $key = 'comment_' . $name;
+      if ($name != $o->ext_type) {
+        $editor_disabled[$key] = true;
+      }
+    }
+  }
+
   global $user, $conf;
   
   if ($user->uid == 0) {
@@ -188,9 +203,6 @@ function comment_form($o) {
   } else {
     $rangelength[1] = 50000;
   }
-
-  // 加载编辑器
-  _comment_get_form_editor($o);
 
   // 转义 <textarea> 标签，防止编辑器破坏页面
   if (!empty($o->body)) {
@@ -315,75 +327,43 @@ function comment_system_site_captcha($op) {
 }
 
 /**
- * 评论表单编辑器
+ * @Implement of hook_editor_info()
  */
-function _comment_get_form_editor($o) {
-  /**
-   * 如果在评论表单中通过编辑器上传的文件，写入 files 表时，以下字段分别为：
-   * 	ext_type - comment
-   * 	ext_id - $comment->cid
-   *  ext_id2 - $comment->ext_id
-   */
-  global $form_tokens;
-  
-  if ($o->info['editor_html']) {
-    $file_url = url('files/editor', array('query' => 'op=ckeditor&name=upload&type=image&image_size=1600x1200'));
-    if (!empty($o->cid)) {
-      $file_url .= '&ext_type=comment&ext_id=' . $o->cid . '&ext_id2=' . $o->ext_id;
-    } else {
-      // 以 $form_token 做为关联条件，在评论保存时做关。若上传了文件，但评论未保存，状态为 status，在 cron 时清理
-      $file_url .= '&status=-1&ext_id2=' . $o->ext_id . '&ext_type=' . $form_tokens['comment_form'];
-    }
+function comment_editor_info() {
+  $editor = array();
 
-    if (empty($o->info['watermark'])) {
-      $file_url .= '&watermark=no';
-    }
-
-    $editor_config = array(
-      'toolbar' => 'small',
-      'upload_image' => 1,
-      'filebrowserImageUploadUrl' => $file_url,
-      'height' => 200, 
-    );
-    
-    if (is_array($o->info['editor_html'])) {
-      $editor_config = array_merge($editor_config, $o->info['editor_html']);
-    }
-    
-    dd_get_editor('comment_form_type_body', $editor_config);
-    
-  } else if ($o->info['editor_text']) {
-    $file_url = url('files/editor', array('query' => 'op=markitup&name=upload&type=image&image_size=1600x1200'));
-    if (!empty($o->cid)) {
-      $file_url .= '&ext_type=comment&ext_id=' . $o->cid . '&ext_id2=' . $o->ext_id;
-    } else {
-      // 以 $form_token 做为关联条件，在评论保存时做关。若上传了文件，但评论未保存，状态为 status，在 cron 时清理
-      $file_url .= '&status=-1&ext_id2=' . $o->ext_id . '&ext_type=' . $form_tokens['comment_form'];
-    }
-    
-    if (empty($o->info['watermark'])) {
-      $file_url .= '&watermark=no';
-    }
-
-    $editor_config = array(
-      'upload' => true,
-      'filebrowserImageUploadUrl' => $file_url,
-      'filebrowserUploadUrl' => $file_url,
-      'upload_image' => true,
-      'options' => array(
-        'height' => 200,
-        'previewParserPath' => f('custom.php?module=comment&op=preview&bootstrap=full')
-      )
-    );
-    
-    if (is_array($o->info['editor_text'])) {
-      $editor_config = array_merge($editor_config, $o->info['editor_text']);
-    }
-    
-    // 加载文本编辑器
-    dd_get_editor_text('#comment_form_type_body', 'html', $editor_config);
+  if (!$datas = comment_get_comment_info()) {
+    return false;
   }
+  
+  $default = array(
+    'dom' => 'comment_form_type_body',
+    'form_id' => 'comment_form',
+    'form_field_name' => 'body',
+    'files' => array(
+      '#validate' => array(
+        'status' => 0,
+      )
+    ),
+    'config' => array(
+      'toolbar' => 'small', 
+    ),
+  );
 
+  foreach ($datas as $key => $info) {
+    // 不需要编辑器
+    if (empty($info['editor'])) continue;
+
+    $data =  is_array($info['editor']) ?  array_merge($default, $info['editor']) : $default;
+
+    $editor['comment_' . $key] = array(
+      'name' => $info['name'],
+      'status' => 1, 
+      'data' => $data
+    );
+  }
+  
+  return $editor;
 }
 
 function comment_form_validate(&$form, &$v) {
@@ -392,20 +372,18 @@ function comment_form_validate(&$form, &$v) {
 
 function comment_form_submit(&$form, &$v) {
   if (comment_save($v['_dida_values'])) {
+    // 将文件关联到评论
+    db_exec('UPDATE {files} SET ext_type = ?, ext_id = ?, ext_id2 = ?, status = 1 WHERE ext_type = ?', 
+    array('comment', $v['_dida_values']->cid, $v['_dida_values']->ext_id, $form['#form_token']));
+    $message = t('comment', '发布成功');
+ 
     if ($v['_dida_values']->status > 0) {
-      
       if ($v['_dida_values']->_db_write_record_is_update) {
         $message = t('comment', '更新成功');
-      } else {
-        // 将文件关联到评论
-        db_exec('UPDATE {files} SET ext_type = ?, ext_id = ?, status = 1 WHERE ext_type = ?', 
-        array('comment', $v['_dida_values']->cid, $form['#form_token']));
-        $message = t('comment', '发布成功');
       }
-      
+
       if (!isset($form['settings']['#redirect'])) {
-        
-        if ($v['_dida_values']->redirect) {
+        if (!empty($v['_dida_values']->redirect)) {
           $form['settings']['#redirect'] = $v['_dida_values']->redirect;
         } else {
           $form['settings']['#redirect'] = url($_GET['q'], array(
@@ -413,13 +391,10 @@ function comment_form_submit(&$form, &$v) {
             'fragment' => 'comment_'.$v['_dida_values']->ext_type.'_'.$v['_dida_values']->cid
           ));
         }
-        
       }
-      
     } else {
       $message = t('comment', '保存成功，正在等待审核');
     }
-    
   } else {
     $message = t('comment', '保存失败');
   }
@@ -682,7 +657,7 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
       if (!empty($type_info['number_desc'])) {
         $o->count = $rows_count-$o->count+1;
       }
-
+      
       $o->body = filter_view($o->body, $o->format);
       
       $o->links = '';

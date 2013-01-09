@@ -38,7 +38,7 @@ $(function() {
     }
   });
   
-  if (settings.comment_anonymous_name) {
+  if (Dida.settings.comment_anonymous_name) {
 	  var anonymous = Dida.getck('comment_anonymous');
 	  if (anonymous) {
 	  	if (anonymous.indexOf('[#@#]') != -1) {
@@ -48,7 +48,7 @@ $(function() {
 	  		if (a[2]) $('#comment_form_type_site').val(a[2]);
 	  	}
 	  } else {
-	  	$('#comment_form_type_name').val(settings.comment_anonymous_name);
+	  	$('#comment_form_type_name').val(Dida.settings.comment_anonymous_name);
 	  }
   }
   
