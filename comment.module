@@ -241,7 +241,7 @@ function comment_form($o) {
     );
   }
   
-  $form['fields']['format'] = filter_form_field(isset($o->status) ? $o->status : $o->info['default_format'], 1);
+  $form['fields']['format'] = filter_form_field(isset($o->format) ? $o->format : $o->info['default_format'], 1);
   
   $form['fields']['cid'] = array(
     '#type' => 'hidden',
