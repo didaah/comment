@@ -214,7 +214,7 @@ function comment_form($o) {
     '#type' => 'textarea',
     '#title' => t('comment', '内容'),
     '#default_value' => $o->body,
-    '#weight' => 0,
+    '#weight' => -1,
     '#required' => $o->info['field_body_required'],
     '#attributes' => array(
       'id' => 'comment_form_type_body',
