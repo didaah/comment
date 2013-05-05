@@ -42,6 +42,10 @@ class="comment_view comment_view_<?php echo $zebra; ?> comment_view_<?php echo $
     | <a title="返回全部评论" href="<?php echo $comment->filter_comment_all; ?>#comment_view_wrapper" rel="nofollow">#返回全部评论</a>
     <?php }?>
   </p>
+
+  <?php if (!empty($comment->field_html)) : ?>
+  <div class="comment_view_fields"><?php echo $comment->field_html; ?></div>
+  <?php endif; ?>
   <div class="comment_body"><?php echo $comment->body; ?></div>
   
   <?php if($comment->links) : ?>

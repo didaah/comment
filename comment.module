@@ -243,7 +243,7 @@ function comment_form($o) {
   
   $form['fields']['format'] = filter_form_field(isset($o->format) ? $o->format : $o->info['default_format'], 1);
   
-  $form['fields']['cid'] = array(
+  $form['fields']['cid'] = $form['fields']['nid'] = array(
     '#type' => 'hidden',
     '#default_value' => $o->cid,
     '#constant' => 1
@@ -306,6 +306,8 @@ function comment_form($o) {
     $function($form, $o);
   }
 
+  field_get_node_form('comment', 'cm_' . $o->ext_type, $o, $form);
+
   module_alter_all('comment_form', $form, $o);
   
   dd_add_css(dd_get_path('module', 'comment').'/comment.css');
@@ -324,6 +326,42 @@ function comment_system_site_captcha($op) {
       ),
     );
   }
+}
+
+function comment_form_validate(&$form, &$v) {
+  return comment_validate($v['_dida_values']);
+}
+
+function comment_form_submit(&$form, &$v) {
+  if (comment_save($v['_dida_values'])) {
+    // 将文件关联到评论
+    db_exec('UPDATE {files} SET ext_type = ?, ext_id = ?, ext_id2 = ?, status = 1 WHERE ext_type = ?', 
+    array('comment', $v['_dida_values']->cid, $v['_dida_values']->ext_id, $form['#form_token']));
+    $message = t('comment', '发布成功');
+ 
+    if ($v['_dida_values']->status > 0) {
+      if ($v['_dida_values']->_db_write_record_is_update) {
+        $message = t('comment', '更新成功');
+      }
+
+      if (!isset($form['settings']['#redirect'])) {
+        if (!empty($v['_dida_values']->redirect)) {
+          $form['settings']['#redirect'] = $v['_dida_values']->redirect;
+        } else {
+          $form['settings']['#redirect'] = url($_GET['q'], array(
+            'query' => ($v['_dida_values']->go_pager ? 'page='.$v['_dida_values']->go_pager : ''),
+            'fragment' => 'comment_'.$v['_dida_values']->ext_type.'_'.$v['_dida_values']->cid
+          ));
+        }
+      }
+    } else {
+      $message = t('comment', '保存成功，正在等待审核');
+    }
+  } else {
+    $message = t('comment', '保存失败');
+  }
+  
+  dd_set_message($message);
 }
 
 /**
@@ -366,44 +404,37 @@ function comment_editor_info() {
   return $editor;
 }
 
-function comment_form_validate(&$form, &$v) {
-  return comment_validate($v['_dida_values']);
-}
-
-function comment_form_submit(&$form, &$v) {
-  if (comment_save($v['_dida_values'])) {
-    // 将文件关联到评论
-    db_exec('UPDATE {files} SET ext_type = ?, ext_id = ?, ext_id2 = ?, status = 1 WHERE ext_type = ?', 
-    array('comment', $v['_dida_values']->cid, $v['_dida_values']->ext_id, $form['#form_token']));
-    $message = t('comment', '发布成功');
- 
-    if ($v['_dida_values']->status > 0) {
-      if ($v['_dida_values']->_db_write_record_is_update) {
-        $message = t('comment', '更新成功');
-      }
-
-      if (!isset($form['settings']['#redirect'])) {
-        if (!empty($v['_dida_values']->redirect)) {
-          $form['settings']['#redirect'] = $v['_dida_values']->redirect;
-        } else {
-          $form['settings']['#redirect'] = url($_GET['q'], array(
-            'query' => ($v['_dida_values']->go_pager ? 'page='.$v['_dida_values']->go_pager : ''),
-            'fragment' => 'comment_'.$v['_dida_values']->ext_type.'_'.$v['_dida_values']->cid
-          ));
-        }
-      }
-    } else {
-      $message = t('comment', '保存成功，正在等待审核');
+/**
+ * @Implement of hook_field_call_group()
+ */
+function comment_field_call_group($type = NULL) {
+  // 评论字段
+  if ($datas = comment_get_comment_info()) {
+    $groups = array();
+    foreach ($datas as $key => $info) {
+      $groups['cm_' . $key] = array(
+        'title' => t('comment', '!name属性', array('!name' => $info['name'])),
+        'fieldset' => true,
+      );
     }
-  } else {
-    $message = t('comment', '保存失败');
+    return $type ? $groups[$type] : $groups;
   }
-  
-  dd_set_message($message);
 }
 
+// public comment_validate(&$comment) {{{ 
+/**
+ * comment_validate
+ * 评论验证
+ * 
+ * @param object $comment 
+ * @access public
+ * @return array|false
+ */
 function comment_validate(&$comment) {
   $error = NULL;
+  
+  if (!empty($comment->cid)) $comment->nid = $comment->cid;
+
   if ($info = comment_get_comment_info($comment->ext_type)) {
     if ($comment->title) {
       $strlen = mb_strlen($comment->title);
@@ -423,11 +454,16 @@ function comment_validate(&$comment) {
   }
   
   if (!$error) {
+    $error = field_get_node_validate('comment', 'cm_' . $comment->ext_type, $comment);
+  }
+
+  if (!$error) {
     $error = module_invoke_all('comment_validate', $comment);
   }
   
   return $error;
 }
+// }}}
 
 function comment_save(&$comment) {
   if (!isset($comment->updated)) {
@@ -447,10 +483,12 @@ function comment_save(&$comment) {
   }
   
   if (db_write_record('comment', $comment, $args)) {
+    $comment->nid = $comment->cid;
+    // 扩展属性
+    field_get_node_save('comment', 'cm_' . $comment->ext_type, $comment);
     module_invoke_all('comment_save', $comment);
     return true;
   }
-  
 }
 
 /**
@@ -468,6 +506,9 @@ function comment_load($cid) {
       } else {
         $comments[$cid]->data = array();
       }
+      $comments[$cid]->nid = $nid;
+      // 扩展属性
+      field_get_node_load('comment', 'cm_' . $comments[$cid]->ext_type, $comments[$cid]);
       module_alter_all('comment_load', $comments[$cid]);
     }
   }
@@ -493,6 +534,8 @@ function comment_delete($comment) {
         }
         db_exec('DELETE FROM {files} WHERE ext_type = ? AND ext_id = ?', array('comment', $comment->cid));
       }
+      // 删除扩展字段
+      field_get_node_load('comment', 'cm_' . $comment->ext_type, $comment);
       module_invoke_all('comment_delete', $comment);
       return true;
     }
@@ -686,11 +729,13 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
         $o->comment_quote = true;
       }
 
+      $o->nid = $o->cid;
+      field_get_node_load('comment', 'cm_' . $o->ext_type, $o);
+      field_get_node_view('comment', 'cm_' . $o->ext_type, $o, 2);
+      $o->field_html = field_get_node_html('comment', $o);
       module_alter_all('comment_view', $o);
-      
       $o->is_create = $is_create;
       $data->view .= theme('comment', $o);
-      
       ++$i;
     }
     
@@ -740,6 +785,7 @@ function comment_template_preprocess_comment(&$var, $hook) {
  */
 function comment_menu() {
   $items = array();
+
   $items['comment/edit/%'] = array(
     'load_functions' => array(2 => array('comment_load')),
     'description' => '编辑评论',
@@ -749,6 +795,7 @@ function comment_menu() {
     'page_arguments' => array(2),
     'file' => 'comment.page.inc',
   );
+
   $items['comment/delete/%'] = array(
     'load_functions' => array(2 => array('comment_load')),
     'description' => '删除评论',
@@ -758,6 +805,7 @@ function comment_menu() {
     'page_arguments' => array(2),
     'file' => 'comment.page.inc',
   );
+
   $items['comment/goto/%'] = array(
     'load_functions' => array(2 => array('comment_load')),
     'description' => '根据评论 id 跳转到所属节点',
@@ -767,12 +815,21 @@ function comment_menu() {
     'page_arguments' => array(2),
     'file' => 'comment.page.inc',
   );
+
   $items['admin/comment'] = array(
     'title' => '评论管理',
     'access_arguments' => array('comment admin view'),
     'page_callback' => 'comment_admin_page',
     'file' => 'comment.admin.inc',
   );
+
+  $items['admin/comment/fields'] = array(
+    'title' => '评论字段',
+    'access_arguments' => array('comment admin fields'),
+    'page_callback' => 'comment_admin_fields',
+    'file' => 'comment.admin.inc',
+  );
+
   return $items;
 }
 
@@ -782,7 +839,18 @@ function comment_menu() {
 function comment_perm() {
   return array(
     'comment admin view' => '管理所有评论',
+    'comment admin fields' => '管理评论字段',
   );
+}
+
+/**
+ * @Implement of hook_system_admin_menus()
+ */
+function comment_system_admin_menus() {
+  return array(array(
+    array(t('comment', '评论管理'), 'admin/comment'),
+    array(t('comment', '评论字段'), 'admin/comment/fields'),
+  ), t('comment', '评论'));
 }
 
 /**
