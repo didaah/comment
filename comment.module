@@ -52,6 +52,7 @@ function comment_get_comment_info($key = NULL) {
     if ($infos = module_invoke_all('comment_info')) {
       foreach ($infos as $name => $info) {
         $data[$name] = array_merge($default, $info);
+        $data[$name]['key'] = $name;
       }
     }
   }
@@ -213,7 +214,7 @@ function comment_form($o) {
     '#type' => 'textarea',
     '#title' => t('comment', '内容'),
     '#default_value' => $o->body,
-    '#weight' => -70,
+    '#weight' => 0,
     '#required' => $o->info['field_body_required'],
     '#attributes' => array(
       'id' => 'comment_form_type_body',
@@ -419,6 +420,98 @@ function comment_field_call_group($type = NULL) {
     }
     return $type ? $groups[$type] : $groups;
   }
+}
+
+/**
+ * @Implement of hook_field_term_view()
+ */
+function comment_field_term_view($term) {
+  // cm_
+  if (!$type = comment_get_comment_info(substr($term->field->type, 3))) {
+    dd_get_access();
+  }
+   
+  dd_set_title(array($term->name, $term->field->name, $type['name']));
+  dd_set_breadcrumb(array(l($term->field->name, 'fields/' . $term->field->field_id), $term->name));
+  dd_set_html_head('<meta name="keywords" content="' . $term->name . '|' . $term->field->name . '|' . $type['name'] . '" />');
+  dd_set_html_head('<meta name="description" content="' . $term->description . '" />');
+ 
+  $content = system_no_content();
+
+  $terms = array($term->tid => $term->name);
+
+  // 获取类别的所有子级
+  field_get_term_childrens($term->fid, field_get_cache_term_id($term->field->field_id), $terms);
+
+  $query = 'SELECT DISTINCT(ftn.nid), n.* FROM {comment} n INNER JOIN {fields_term_node} ftn ON n.cid = ftn.nid';
+
+  $tids = array();
+  
+  foreach ($terms as $tid => $name) {
+    $tids[] = $tid;
+  }
+  
+  $query .= ' WHERE n.status > 0 AND ftn.tid IN (' . implode(',', $tids) . ')';
+  $query .= ' ORDER BY n.created DESC';
+
+  if ($count = db_query(preg_replace('/SELECT.*?FROM/ims', 'SELECT COUNT(DISTINCT(ftn.nid)) FROM', $query), $args, 
+  array('return' => 'column'))) {
+    if ($term->fetch = pager_query($query, 20, 0, $count)) {
+      $field->pager = pager_view();
+      $item = array();
+      foreach ($term->fetch as $o) {
+        $item[] = l($o->title, 'comment/goto/' . $o->cid);
+      }
+      $content = theme('item_list', $item);
+      $content .= $field->pager;
+    }
+  }
+
+  return $content;
+}
+
+/**
+ * @Implement of hook_field_view()
+ */
+function comment_field_view($field) {
+  // cm_
+  if (!$type = comment_get_comment_info(substr($field->type, 3))) {
+    dd_get_access();
+  }
+  
+  dd_set_title(array($field->name, $type['name']));
+  dd_set_breadcrumb(array($field->name));
+  dd_set_html_head('<meta name="keywords" content="' . $field->name . '|' . $type['name'] . "\" />\n");
+  dd_set_html_head('<meta name="description" content="' . $field->description . "\" />\n");
+
+  $content = system_no_content();
+
+  if ($terms = field_get_cache_term_id($field->field_id)) {
+    $query = 'SELECT DISTINCT(ftn.nid), n.* FROM {comment} n INNER JOIN {fields_term_node} ftn ON n.cid = ftn.nid';
+    $tids = array();
+    
+    foreach ($terms as $term) {
+      $tids[] = $term->tid;
+    }
+    
+    $query .= ' WHERE n.status > 0 AND ftn.tid IN (' . implode(',', $tids) . ')';
+    $query .= ' ORDER BY n.created DESC';
+
+    if ($count = db_query(preg_replace('/SELECT.*?FROM/ims', 'SELECT COUNT(DISTINCT(ftn.nid)) FROM', $query), $args, 
+    array('return' => 'column'))) {
+      if ($field->fetch = pager_query($query, 20, 0, $count)) {
+        $field->pager = pager_view();
+        $item = array();
+        foreach ($field->fetch as $o) {
+          $item[] = l($o->title, 'comment/goto/' . $o->cid);
+        }
+        $content = theme('item_list', $item);
+        $content .= $field->pager;
+      }
+    }
+  }
+
+  return $content;
 }
 
 // public comment_validate(&$comment) {{{ 
