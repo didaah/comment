@@ -759,7 +759,7 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
  
   $query .= $sql_suffix;
 
-  $query .= ' ORDER BY c.cid ' . $order;
+  $query .= ' ORDER BY c.created ' . $order;
 
   if ($pager) {
     $fetch = pager_query($query, $count, 0, NULL, $args);
