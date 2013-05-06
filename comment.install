@@ -2,6 +2,18 @@
 // $Id$
 
 /**
+ * @Implement hook_update_x()
+ */
+function comment_update_1() {
+  $ret = array();
+  $ret[] = db_drop_index('comment', 'ese');
+  $ret[] = db_add_index('comment', 'ese', array('ext_type', 'status', 'ext_id'));
+  $ret[] = db_add_index('es2', array('ext_type', 'status', 'ext_id2'));
+  $ret[] = db_add_index('esu', array('ext_type', 'status', 'uid'));
+  return $ret;
+}
+
+/**
  * @Implement of hook_schema()
  */
 function comment_schema() {
@@ -127,7 +139,8 @@ function comment_schema() {
     ),
     'indexes' => array(
       'ese' => array('ext_type', 'status', 'ext_id'),
-      'ese' => array('ext_type', 'status', 'uid'),
+      'es2' => array('ext_type', 'status', 'ext_id2'),
+      'esu' => array('ext_type', 'status', 'uid'),
     ),
     'primary key' => array('cid'),
   );
