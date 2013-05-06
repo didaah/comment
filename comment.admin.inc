@@ -19,7 +19,7 @@ function comment_admin_page() {
     
     foreach ($fetch as $o) {
       $table[] = array(
-        l($o->title, 'comment/goto/' . $o->cid, array('attributes' => array('target' => '_blank'))),
+        l($o->title ? $o->title : t('comment', '无主题'), 'comment/goto/' . $o->cid, array('attributes' => array('target' => '_blank'))),
         $o->name, $o->host, format_date($o->created),
         l('删除', 'admin/comment', array('query' => 'op=delete&cid=' . $o->cid, 'attributes' => array('class' => 'confirmajax')))
       );
