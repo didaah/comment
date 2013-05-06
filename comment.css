@@ -3,22 +3,28 @@
 .comment_view {
   margin: 5px 0;
 }
+
 .comment_header{
   background: #E9F7F6;
   padding: 8px 5px;
 }
+
 .comment_body {
   line-height: 20px;
 }
+
 .comment_view_even .comment_header{
   background: #EDF3DE;
 }
+
 #comment_form_type_title{
 	width: 400px;
 }
+
 #comment_form textarea, #comment_form .collapsible{
   width: 550px;
 }
+
 .comment_links{
   padding: 4px 0;
   margin: 6px 0;
@@ -26,6 +32,17 @@
   border-top: 1px solid #D6E5FA;
   text-align: right;
 }
+
 .comment_links a{
   padding: 0 5px;
+}
+
+.type_comment_view #comment_type_list li {
+  margin: 5px 0;
+  border-bottom: 1px solid #D6E5FA;
+}
+
+.type_comment_view #comment_type_list li .links {
+  text-align: right;
+  padding: 5px 0;
 }

@@ -46,7 +46,6 @@ function comment_default_info() {
  */
 function comment_get_comment_info($key = NULL) {
   static $data;
-
   if (!isset($data)) {
     $default = comment_default_info();
     if ($infos = module_invoke_all('comment_info')) {
@@ -460,7 +459,9 @@ function comment_field_term_view($term) {
       $field->pager = pager_view();
       $item = array();
       foreach ($term->fetch as $o) {
-        $item[] = l($o->title, 'comment/goto/' . $o->cid);
+        $o->url = 'comment/goto/' . $o->cid;
+        module_invoke_all('comment_fields', $o);
+        $item[] = l($o->title, $o->url);
       }
       $content = theme('item_list', $item);
       $content .= $field->pager;
@@ -503,7 +504,9 @@ function comment_field_view($field) {
         $field->pager = pager_view();
         $item = array();
         foreach ($field->fetch as $o) {
-          $item[] = l($o->title, 'comment/goto/' . $o->cid);
+          $o->url = 'comment/goto/' . $o->cid;
+          module_invoke_all('comment_fields', $o);
+          $item[] = l($o->title, $o->url);
         }
         $content = theme('item_list', $item);
         $content .= $field->pager;
@@ -634,6 +637,21 @@ function comment_delete($comment) {
     }
   }
 }
+
+/**
+ * 验证评论列表浏览权限
+ * @param array $type
+ * @return bool
+ */
+function comment_is_type_view($type) {
+  $type = (object) $type;
+  $type->ext_type = $type->key;
+  // 默认允许，可在 hook_comment_is_type_view 中将 $o->is_view 设为 false
+  $type->is_view = true;
+  module_invoke_all('comment_is_type_view', $type);
+  return $type->is_view;
+}
+
 
 /**
  * 验证评论浏览权限
@@ -853,8 +871,13 @@ function comment_theme() {
   return array(
     'comment' => array(
       'tpl' => 'comment.tpl.php',
-      'title' => t('forum', '评论模块'),
+      'title' => t('comment', '评论模板'),
       'args' => array('comment'),
+    ),
+    'comment_type' => array(
+      'tpl' => 'type_comment.tpl.php',
+      'title' => t('forum', '按类型浏览所有评论'),
+      'args' => array('type'),
     ),
   );
 }
@@ -872,6 +895,21 @@ function comment_template_preprocess_comment(&$var, $hook) {
     $var['theme_config']->tpl[] = 'comment_'.$var['comment']->ext_type.'.tpl.php';
   } 
 }
+
+/**
+ * @Implement of hook_template_preprocess_x()
+ * 
+ * 评论类型浏览模板文件优先级：
+ * type_comment_{$type->ext_type}.tpl.php
+ * type_comment.tpl.php
+ * 
+ */
+function comment_template_preprocess_comment_type(&$var, $hook) {
+  if ($var['type']->ext_type) {
+    $var['theme_config']->tpl[] = 'type_comment_'.$var['type']->ext_type.'.tpl.php';
+  } 
+}
+
 
 /**
  * @Implement of hook_menu()
@@ -905,6 +943,16 @@ function comment_menu() {
     'access_callback' => 'comment_is_view',
     'access_arguments' => array(2),
     'page_callback' => 'comment_page_goto',
+    'page_arguments' => array(2),
+    'file' => 'comment.page.inc',
+  );
+
+  $items['comment/type/%'] = array(
+    'load_functions' => array(2 => array('comment_get_comment_info')),
+    'description' => '按类型浏览所有评论',
+    'access_callback' => 'comment_is_type_view',
+    'access_arguments' => array(2),
+    'page_callback' => 'comment_page_type',
     'page_arguments' => array(2),
     'file' => 'comment.page.inc',
   );
