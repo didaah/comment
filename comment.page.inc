@@ -49,8 +49,8 @@ function comment_page_edit($comment) {
  *  评论对象
  */
 function comment_page_goto($comment) {
-  if ($url = module_invoke_first('comment_goto', $comment)) {
-    dd_goto($url);
+  if ($urls = module_invoke_all('comment_goto', $comment)) {
+    dd_goto(!is_array($urls) ? $urls[0] : $urls);
   } else {
     dd_goto(NULL);
   }
