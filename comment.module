@@ -795,6 +795,7 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
     $create->ext_id = $ext_id;
     
     $is_create = comment_is_create($create);
+    $data->fetch = $fetch;
     $data->view = '<div id="comment_view_wrapper">';
     $i = 1;
     foreach ($fetch as $o) {
