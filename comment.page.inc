@@ -50,7 +50,7 @@ function comment_page_edit($comment) {
  */
 function comment_page_goto($comment) {
   if ($urls = module_invoke_all('comment_goto', $comment)) {
-    dd_goto(!is_array($urls) ? $urls[0] : $urls);
+    dd_goto(is_array($urls) ? $urls[0] : $urls);
   } else {
     dd_goto(NULL);
   }
