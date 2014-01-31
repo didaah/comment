@@ -14,14 +14,25 @@ function comment_admin_page() {
     exit;
   }
   
-  if ($fetch = pager_query('SELECT c.title, c.cid, c.host, c.created, c.body, u.name FROM {comment} c INNER JOIN {users} u 
-  ON c.uid = u.uid ORDER BY cid DESC', 20)) {
-    
+  $args = array();
+  $query = 'SELECT c.title, c.cid, c.host, c.created, c.body, u.name, c.ext_type FROM {comment} c INNER JOIN {users} u ON c.uid = u.uid';
+  if (!empty($_GET['keyword'])) {
+    $keyword = '%' . urldecode($_GET['keyword']) . '%';
+    $args = array($keyword, $keyword, $keyword);
+    $query .= ' WHERE c.host LIKE ? OR c.title LIKE ? OR c.name LIKE ?';
+  }
+  $query .= ' ORDER BY c.cid DESC';
+
+  $output = dd_get_form('form_admin_search');
+  if ($fetch = pager_query($query, 20, 0, NULL, $args)) {
     foreach ($fetch as $o) {
       $o->title .= ' ' . mb_substr(strip_tags($o->body), 0, 50) . '……';
       $table[] = array(
         array(
-          'data' => l($o->title, 'comment/goto/' . $o->cid, array('attributes' => array('target' => '_blank'))),
+          'data' => l('+' . $o->title, 'comment/goto/' . $o->cid, array(
+            'attributes' => array('target' => '_blank'), 
+            'fragment' => 'comment_' . $o->ext_type . '_' . $o->cid
+            )),
           'width' => '40%',
         ),
         $o->name, $o->host, format_date($o->created),
@@ -29,7 +40,7 @@ function comment_admin_page() {
       );
     }
     
-    $output = theme('table', array('主题', '发布人', '发布者 IP', '发布时间', '操作'), $table, array('class' => 'center_table'));
+    $output .= theme('table', array('主题', '发布人', '发布者 IP', '发布时间', '操作'), $table, array('class' => 'center_table'));
     $output .= pager_view();
   }
   
