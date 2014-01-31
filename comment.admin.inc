@@ -7,9 +7,23 @@ function comment_admin_page() {
     l(t('comment', '评论字段'), 'admin/comment/fields'),
   ));
   
-  if (!empty($_GET['op']) && $_GET['op'] == 'delete' && $_GET['cid']) {
-    if (comment_delete($_GET['cid'])) {
-      echo 'tr';
+  if (!empty($_GET['op'])) {
+    if ($_GET['op'] == 'delete' && $_GET['cid']) {
+      if (comment_delete($_GET['cid'])) {
+        echo 'tr';
+        exit;
+      }
+    } else if ($_GET['op'] == 'delete_host' && $_GET['host']) {
+      if ($fetch = db_query('SELECT cid FROM {comment} WHERE host = ?', array($_GET['host']))) {
+        $count = 0;
+        foreach ($fetch as $o) {
+          if (comment_delete($o->cid)) {
+            $count++;
+          }
+        }
+        dd_set_message(t('comment', '已删除 !count 条评论', array('!count' => $count)));
+        echo 'reload';
+      }
     }
     exit;
   }
@@ -33,10 +47,15 @@ function comment_admin_page() {
             'attributes' => array('target' => '_blank'), 
             'fragment' => 'comment_' . $o->ext_type . '_' . $o->cid
             )),
-          'width' => '40%',
+          'width' => '30%',
         ),
-        $o->name, $o->host, format_date($o->created),
-        l('删除', 'admin/comment', array('query' => 'op=delete&cid=' . $o->cid, 'attributes' => array('class' => 'confirmajax')))
+        $o->name,
+        array(
+          'data' => dd_get_ip($o->host, 1) . '<br/>' .  l('删除', 'admin/comment', array('query' => 'op=delete_host&host=' . $o->host, 'attributes' => array('class' => 'confirmajax'))),
+          'width' => '20%' 
+        ),
+        format_date($o->created),
+        l('删除', 'admin/comment', array('query' => 'op=delete&cid=' . $o->cid, 'attributes' => array('class' => 'confirmajax'))),
       );
     }
     
@@ -132,7 +151,6 @@ function comment_admin_fields() {
   dd_set_tabs($tabs);
   return $output;
 }
-// }}}
 // }}}
 
 
