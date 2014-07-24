@@ -349,8 +349,8 @@ function comment_form_submit(&$form, &$v) {
           $form['settings']['#redirect'] = $v['_dida_values']->redirect;
         } else {
           $form['settings']['#redirect'] = url($_GET['q'], array(
-            'query' => ($v['_dida_values']->go_pager ? 'page='.$v['_dida_values']->go_pager : ''),
-            'fragment' => 'comment_'.$v['_dida_values']->ext_type.'_'.$v['_dida_values']->cid
+            'query' => ($v['_dida_values']->go_pager ? 'page=' . $v['_dida_values']->go_pager : ''),
+            'fragment' => 'comment_' . $v['_dida_values']->ext_type . '_' . $v['_dida_values']->cid
           ));
         }
       }
@@ -893,7 +893,7 @@ function comment_theme() {
  */
 function comment_template_preprocess_comment(&$var, $hook) {
   if ($var['comment']->ext_type) {
-    $var['theme_config']->tpl[] = 'comment_'.$var['comment']->ext_type.'.tpl.php';
+    $var['theme_config']->tpl[] = 'comment_' . $var['comment']->ext_type . '.tpl.php';
   } 
 }
 
