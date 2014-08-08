@@ -1106,3 +1106,14 @@ function comment_call_custom($v) {
   
   exit;
 }
+
+/**
+ * @Implement of hook_logs_info()
+ */
+function comment_logs_info() {
+  return array(
+    'comment_hide' => t('comment', '评论屏蔽'),
+  );
+}
+
+
