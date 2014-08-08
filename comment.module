@@ -1086,7 +1086,7 @@ function comment_call_custom($v) {
           if ($comment->status) {
             dd_add_css(dd_get_path('module', 'comment').'/comment.css');
             $content = '<p class="comment_header">' . t('comment', '!name 发布于 !time', array('!name' => $comment->name, '!time' => format_date($comment->created))) . '</p>';
-            if ($omment->status != 2) {
+            if ($comment->status != 2) {
               $content .= '<p class="comment_body">'. filter_view($comment->body, $o->format, 'comment_' . $comment->ext_type, $comment->cid). '</p>';
             } else {
               $content .= '<p class="comment_body comment_body_disabled">' . t('comment', '该内容涉嫌违规，已屏蔽，请理性发言。') . '</p>';
