@@ -659,14 +659,26 @@ function comment_is_type_view($type) {
  * @return bool
  */
 function comment_is_view($comment) {
- 
   // 默认允许，可在 hook_comment_is_view 中将 $o->is_view 设为 false
   if ($comment->status > 0) {
     $comment->is_view = true;
-
     module_invoke_all('comment_is_view', $comment);
-    
     return $comment->is_view;
+  } 
+}
+
+/**
+ * 验证评论屏蔽权限
+ * @param object $comment
+ * @return bool
+ */
+function comment_is_hide($comment) {
+  // 默认允许，可在 hook_comment_is_hide 中将 $o->is_hide 设为 false
+  if ($comment->status != 2) {
+    global $user;
+    $comment->is_hide = !empty($user->uid) && $user->uid == 1;
+    module_invoke_all('comment_is_hide', $comment);
+    return $comment->is_hide;
   } 
 }
 
@@ -812,16 +824,24 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
       if (!empty($type_info['number_desc'])) {
         $o->count = $rows_count-$o->count+1;
       }
-      
-      $o->body = filter_view($o->body, $o->format);
+
+      if ($o->status != 2) {
+        $o->body = filter_view($o->body, $o->format);
+      } else {
+        $o->body = '<p class="comment_body_disabled">' . t('comment', '该内容涉嫌违规，已屏蔽，请理性发言。') . '</p>';
+        $o->title = '内容已屏蔽';
+      }
       
       $o->links = '';
-      
+
+      if (comment_is_hide($o)) {
+        $o->links .= l(t('forum', '屏蔽'), 'comment/hide/' . $o->cid);
+      }
       if (comment_is_update($o)) {
-        $o->links .= l(t('forum', '编辑'), 'comment/edit/'.$o->cid);
+        $o->links .= l(t('forum', '编辑'), 'comment/edit/' . $o->cid);
       }
       if (comment_is_delete($o)) {
-        $o->links .= l(t('forum', '删除'), 'comment/delete/'.$o->cid,
+        $o->links .= l(t('forum', '删除'), 'comment/delete/' . $o->cid,
         array('attributes' => array('class' => 'confirm')));
       }
       
@@ -857,7 +877,6 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
       // 评论翻页参数
       $data->pager = pager_view(array(), $count, 0, NULL, 7, array('fragment' => 'comment_view_wrapper'));
     }
-    
   }
   
   dd_add_js(dd_get_path('module', 'comment').'/comment.js');
@@ -924,6 +943,16 @@ function comment_menu() {
     'access_callback' => 'comment_is_update',
     'access_arguments' => array(2),
     'page_callback' => 'comment_page_edit',
+    'page_arguments' => array(2),
+    'file' => 'comment.page.inc',
+  );
+
+  $items['comment/hide/%'] = array(
+    'load_functions' => array(2 => array('comment_load')),
+    'description' => '屏蔽评论',
+    'access_callback' => 'comment_is_hide',
+    'access_arguments' => array(2),
+    'page_callback' => 'comment_page_hide',
     'page_arguments' => array(2),
     'file' => 'comment.page.inc',
   );
@@ -1024,7 +1053,7 @@ function comment_filter($op, $delta = NULL, $format = NULL, $value = NULL, $filt
  */
 function _comment_filter_get_link($mat) {
   if ($mat[2]) {
-    return l('@'.$mat[1], f('custom.php?module=comment&iframe=true&op=load&bootstrap=full&cid='.$mat[2]), array(
+    return l('@' . $mat[1], f('custom.php?module=comment&iframe=true&op=load&bootstrap=full&cid=' . $mat[2]), array(
       'attributes' => array(
         'class' => 'dialog',
         'alt' => t('comment', '回复 !name', array('!name' => $mat[1])),
@@ -1052,23 +1081,22 @@ function comment_call_custom($v) {
     
     case 'load':
       if ($v['cid'] && $v['bootstrap'] == 'full') {
-        
         if ($comment = db_query('SELECT cid, body, status, name, format, ext_type, created FROM {comment} WHERE cid = ?',
         array($v['cid']), array('return' => 'one'))) {
-          
           if ($comment->status) {
             dd_add_css(dd_get_path('module', 'comment').'/comment.css');
             $content = '<p class="comment_header">' . t('comment', '!name 发布于 !time', array('!name' => $comment->name, '!time' => format_date($comment->created))) . '</p>';
-            $content .= '<p class="comment_body">'. filter_view($comment->body, $o->format, 'comment_'.$comment->ext_type, $comment->cid). '</p>';
+            if ($omment->status != 2) {
+              $content .= '<p class="comment_body">'. filter_view($comment->body, $o->format, 'comment_' . $comment->ext_type, $comment->cid). '</p>';
+            } else {
+              $content .= '<p class="comment_body comment_body_disabled">' . t('comment', '该内容涉嫌违规，已屏蔽，请理性发言。') . '</p>';
+            }
             echo theme('print', $content);
             
           } else {
-            
             echo t('comment', '评论未通过审核');
-            
           }
         }
-        
       } else {
         echo t('comment', '无效的评论 ID');
       }

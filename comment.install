@@ -113,7 +113,7 @@ function comment_schema() {
         'not null' => TRUE,
         'default' => 0,
         'size' => 'tiny',
-        'description' => '0：待审核，1、正常，模块也可自定义',
+        'description' => '0：待审核，1、正常，模块也可自定义，2、屏蔽主内容',
       ),
       'pid' => array(
         'type' => 'int',

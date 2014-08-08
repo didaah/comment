@@ -44,6 +44,29 @@ function comment_page_edit($comment) {
 }
 
 /**
+ * 屏蔽评论
+ * @param (object) $comment
+ *  评论对象
+ */
+function comment_page_hide($comment) {
+  if (db_exec('UPDATE {comment} SET status = 2 WHERE cid = ?', array($comment->cid))) {
+    dd_set_message(t('comment', '屏蔽成功'));
+  } else {
+    dd_set_message(t('comment', '屏蔽失败'), 'error');
+  }
+  
+  if (!empty($_GET['redirect'])) {
+    $url = $_GET['redirect'];
+  } else if (!empty($comment->redirect)) {
+    $url = $comment->redirect;
+  } else {
+    comment_page_goto($comment);
+  }
+
+  dd_goto($url);
+}
+
+/**
  * 根据评论 id 跳转到所属节点
  * @param (object) $comment
  *  评论对象
