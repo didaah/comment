@@ -803,6 +803,7 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
   if ($fetch) {
     
     $create = new stdClass;
+    $data = new stdClass;
     $create->ext_type = $ext_type;
     $create->ext_id = $ext_id;
     
@@ -835,7 +836,11 @@ function comment_ext_view($ext_type, $ext_id = NULL, $count = 50, $pager = true,
       $o->links = '';
 
       if (comment_is_hide($o)) {
-        $o->links .= l(t('forum', '屏蔽'), 'comment/hide/' . $o->cid);
+        $o->links .= l(t('forum', '屏蔽'), 'comment/hide/' . $o->cid, array(
+          'attributes' => array(
+            'class' => 'confirm'
+          )
+        ));
       }
       if (comment_is_update($o)) {
         $o->links .= l(t('forum', '编辑'), 'comment/edit/' . $o->cid);

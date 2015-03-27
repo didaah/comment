@@ -49,7 +49,10 @@ function comment_page_edit($comment) {
  *  评论对象
  */
 function comment_page_hide($comment) {
-  if (db_exec('UPDATE {comment} SET status = 2 WHERE cid = ?', array($comment->cid))) {
+  global $user;
+
+  if (db_exec('UPDATE {comment} SET status = 2, status_uid = ? WHERE cid = ?',
+  array($user->uid, $comment->cid))) {
     dd_set_message(t('comment', '屏蔽成功'));
     dd_log('comment_hide', t('comment', '屏蔽评论，ID：!cid', array('!cid' => $comment->cid)));
   } else {
